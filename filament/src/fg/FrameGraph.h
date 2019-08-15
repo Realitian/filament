@@ -177,7 +177,7 @@ public:
     template<typename T>
     typename T::Descriptor const& getDescriptor(FrameGraphResource r) {
         fg::ResourceEntry<T>& entry = getResourceEntry<T>(r);
-        return entry.getDescriptor();
+        return entry.descriptor;
     }
 
     FrameGraphTexture::Descriptor const* getDescriptor(FrameGraphResource r) {

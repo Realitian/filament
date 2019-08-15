@@ -52,17 +52,16 @@ public:
 
 template<typename T>
 class ResourceEntry : public ResourceEntryBase {
-    using Descriptor = typename T::Descriptor;
     using Storage = std::aligned_storage_t<sizeof(T), alignof(T)>;
-    Descriptor descriptor;
     Storage resource;
 
 public:
+    using Descriptor = typename T::Descriptor;
+    Descriptor descriptor;
+
     explicit ResourceEntry(const char* name, uint16_t id, Descriptor const& desc) noexcept
         : ResourceEntryBase(name, id), descriptor(desc) {
     }
-
-    Descriptor const& getDescriptor() const noexcept { return descriptor; }
 
     T const& getResource() const noexcept { return reinterpret_cast<T const&>(resource); }
 

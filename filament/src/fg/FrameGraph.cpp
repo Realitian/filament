@@ -141,9 +141,18 @@ void FrameGraph::Builder::createRenderTarget(const char* name,
             ResourceNode& node = fg.getResourceNode(attachmentInfo.getHandle());
 
             // figure out the attachment flags
-            uint8_t usage = node.resource->usage;
-            usage |= usages[i];
-            node.resource->usage = TextureUsage(usage);
+
+            // FIXME: we need to assume the type node.resource here. It would be nice if
+            //        we didn't need to know about the Texure resource type
+            //        this might be possible when we make rendertarget a first class
+            //        resource type.
+            //        Alternatively we could ask users to set the usage flags properly
+            //        instead of letting the frame graph figure it out.
+#if UTILS_HAS_RTTI
+            assert(static_cast<fg::ResourceEntry<FrameGraphTexture> *>(node.resource));
+#endif
+            auto pTextureResource = static_cast<fg::ResourceEntry<FrameGraphTexture> *>(node.resource);
+            pTextureResource->descriptor.usage |= usages[i];
 
             // renderTargetIndex is used to retrieve the Descriptor
             node.renderTargetIndex = renderTarget.index;
