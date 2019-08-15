@@ -53,7 +53,7 @@ struct PassNode { // 200
     }
 
     FrameGraphResource read(FrameGraph& fg, FrameGraphResource const& handle, bool isRenderTarget = false) {
-        ResourceNode const& node = fg.getResource(handle);
+        ResourceNode const& node = fg.getResourceNode(handle);
 
         if (!isRenderTarget) {
             node.resource->usage |= backend::TextureUsage::SAMPLEABLE;
@@ -79,7 +79,7 @@ struct PassNode { // 200
     }
 
     FrameGraphResource write(FrameGraph& fg, const FrameGraphResource& handle) {
-        ResourceNode const& node = fg.getResource(handle);
+        ResourceNode const& node = fg.getResourceNode(handle);
 
         // don't allow multiple writes of the same resource -- it's just redundant.
         auto pos = std::find_if(writes.begin(), writes.end(),

@@ -81,14 +81,14 @@ const char* FrameGraph::Builder::getPassName() const noexcept {
 }
 
 const char* FrameGraph::Builder::getName(FrameGraphResource const& r) const noexcept {
-    ResourceNode& resourceNode = mFrameGraph.getResource(r);
+    ResourceNode& resourceNode = mFrameGraph.getResourceNode(r);
     fg::ResourceEntryBase* pResource = resourceNode.resource;
     assert(pResource);
     return pResource ? pResource->name : "(invalid)";
 }
 
 bool FrameGraph::Builder::isAttachment(FrameGraphResource resource) const noexcept {
-    ResourceNode& node = mFrameGraph.getResource(resource);
+    ResourceNode& node = mFrameGraph.getResourceNode(resource);
     return node.resource->usage & (
             TextureUsage::COLOR_ATTACHMENT |
             TextureUsage::DEPTH_ATTACHMENT |
@@ -98,7 +98,7 @@ bool FrameGraph::Builder::isAttachment(FrameGraphResource resource) const noexce
 FrameGraphRenderTarget::Descriptor const&
 FrameGraph::Builder::getRenderTargetDescriptor(FrameGraphResource attachment) const {
     FrameGraph& fg = mFrameGraph;
-    ResourceNode& node = fg.getResource(attachment);
+    ResourceNode& node = fg.getResourceNode(attachment);
     ASSERT_POSTCONDITION(node.renderTargetIndex != ResourceNode::UNINITIALIZED,
             "Resource \"%s\" isn't a render target attachment", node.resource->name);
     assert(node.renderTargetIndex < fg.mRenderTargets.size());
@@ -138,7 +138,7 @@ void FrameGraph::Builder::createRenderTarget(const char* name,
     for (size_t i = 0; i < desc.attachments.textures.size(); i++) {
         FrameGraphRenderTarget::Attachments::AttachmentInfo attachmentInfo = desc.attachments.textures[i];
         if (attachmentInfo.isValid()) {
-            ResourceNode& node = fg.getResource(attachmentInfo.getHandle());
+            ResourceNode& node = fg.getResourceNode(attachmentInfo.getHandle());
 
             // figure out the attachment flags
             uint8_t usage = node.resource->usage;
@@ -183,8 +183,9 @@ const char* FrameGraphPassResources::getPassName() const noexcept {
     return mPass.name;
 }
 
-backend::Handle<backend::HwTexture> FrameGraphPassResources::getTexture(FrameGraphResource r) const noexcept {
-    TextureResource const* const pResource = mFrameGraph.mResourceNodes[r.index].resource;
+fg::ResourceEntryBase const& FrameGraphPassResources::getResourceEntryBase(FrameGraphResource r) const noexcept {
+    ResourceNode& node = mFrameGraph.getResourceNode(r);
+    fg::ResourceEntryBase const* const pResource = node.resource;
     assert(pResource);
 
     // check that this FrameGraphResource is indeed used by this pass
@@ -192,7 +193,7 @@ backend::Handle<backend::HwTexture> FrameGraphPassResources::getTexture(FrameGra
             "Pass \"%s\" doesn't declare reads to resource \"%s\" -- expect graphic corruptions",
             mPass.name, pResource->name);
 
-    return pResource->texture;
+    return *pResource;
 }
 
 FrameGraphPassResources::RenderTargetInfo
@@ -230,7 +231,7 @@ FrameGraphPassResources::getRenderTarget(FrameGraphResource r, uint8_t level) co
     // check that this FrameGraphRenderTarget is indeed declared by this pass
     ASSERT_POSTCONDITION_NON_FATAL(info.target,
             "Pass \"%s\" doesn't declare a rendertarget using \"%s\" -- expect graphic corruptions",
-            mPass.name, fg.getResource(r).resource->name);
+            mPass.name, fg.getResourceNode(r).resource->name);
     
 //    slog.d << mPass.name << ": resource = \"" << renderTarget.name << "\", flags = "
 //        << io::hex
@@ -281,9 +282,9 @@ FrameGraphResource FrameGraph::createResourceNode(fg::ResourceEntryBase* resourc
 
 FrameGraphResource FrameGraph::moveResource(FrameGraphResource from, FrameGraphResource to) {
     // this is just used to validate the 'to' handle
-    getResource(to);
+    getResourceNode(to);
     // validate and rename the 'from' handle
-    ResourceNode const& node = getResource(from);
+    ResourceNode const& node = getResourceNode(from);
     ++node.resource->version;
     mAliases.push_back({from, to});
     return createResourceNode(node.resource);
@@ -324,7 +325,7 @@ FrameGraphResource FrameGraph::create(fg::ResourceEntryBase* pResourceEntry) noe
     return createResourceNode(pResourceEntry);
 }
 
-ResourceNode& FrameGraph::getResource(FrameGraphResource r) {
+ResourceNode& FrameGraph::getResourceNode(FrameGraphResource r) {
     auto& resourceNodes = mResourceNodes;
 
     ASSERT_POSTCONDITION(r.isValid(), "using an uninitialized resource handle");
@@ -340,8 +341,8 @@ ResourceNode& FrameGraph::getResource(FrameGraphResource r) {
     return node;
 }
 
-fg::ResourceEntryBase& FrameGraph::getResourceEntry(FrameGraphResource r) noexcept {
-    ResourceNode& node = getResource(r);
+fg::ResourceEntryBase& FrameGraph::getResourceEntryBase(FrameGraphResource r) noexcept {
+    ResourceNode& node = getResourceNode(r);
     assert(node.resource);
     return *node.resource;
 }

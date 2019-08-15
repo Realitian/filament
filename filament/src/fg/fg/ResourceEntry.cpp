@@ -19,7 +19,8 @@
 namespace filament {
 namespace fg {
 
-ResourceEntryBase::ResourceEntryBase(const char* name) noexcept : name(name) {
+ResourceEntryBase::ResourceEntryBase(const char* name, uint16_t id) noexcept
+        : name(name), id(id) {
 }
 
 ResourceEntryBase::~ResourceEntryBase() = default;

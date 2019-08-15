@@ -42,7 +42,17 @@ public:
     // Return the name of the pass being executed
     const char* getPassName() const noexcept;
 
-    backend::Handle<backend::HwTexture> getTexture(FrameGraphResource r) const noexcept;
+    template<typename T>
+    T const& get(FrameGraphResource r) const noexcept {
+        fg::ResourceEntry<T> const& entry = getResourceEntry<T>(r);
+        return entry.getResource();
+    }
+
+    backend::Handle<backend::HwTexture> getTexture(FrameGraphResource r) const noexcept {
+        return get<FrameGraphTexture>(r).texture;
+    }
+
+
 
     RenderTargetInfo getRenderTarget(FrameGraphResource r, uint8_t level = 0) const noexcept;
 
@@ -59,6 +69,14 @@ public:
 private:
     friend class FrameGraph;
     explicit FrameGraphPassResources(FrameGraph& fg, fg::PassNode const& pass) noexcept;
+
+    fg::ResourceEntryBase const& getResourceEntryBase(FrameGraphResource r) const noexcept;
+
+    template<typename T>
+    fg::ResourceEntry<T> const& getResourceEntry(FrameGraphResource r) const noexcept {
+        return static_cast<fg::ResourceEntry<T> const&>(getResourceEntryBase(r));
+    }
+
     FrameGraph& mFrameGraph;
     fg::PassNode const& mPass;
 };

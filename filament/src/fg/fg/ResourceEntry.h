@@ -31,7 +31,7 @@ struct PassNode;
 
 class ResourceEntryBase {
 public:
-    explicit ResourceEntryBase(const char* name) noexcept;
+    explicit ResourceEntryBase(const char* name, uint16_t id) noexcept;
     ResourceEntryBase(ResourceEntryBase const&) = default;
     virtual ~ResourceEntryBase();
 
@@ -42,7 +42,7 @@ public:
 
     // constants
     const char* const name;
-    uint16_t id{};                      // for debugging and graphing
+    const uint16_t id;                      // for debugging and graphing
     bool imported{};
 
     // updated by builder
@@ -63,8 +63,8 @@ class ResourceEntry : public ResourceEntryBase {
     Storage resource;
 
 public:
-    explicit ResourceEntry(const char* name, Descriptor const& desc) noexcept
-        : ResourceEntryBase(name), descriptor(desc) {
+    explicit ResourceEntry(const char* name, uint16_t id, Descriptor const& desc) noexcept
+        : ResourceEntryBase(name, id), descriptor(desc) {
     }
 
     Descriptor const& getDescriptor() const noexcept { return descriptor; }

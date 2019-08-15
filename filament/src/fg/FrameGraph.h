@@ -71,8 +71,7 @@ public:
         template<typename T>
         FrameGraphResource create(const char* name,
                 typename T::Descriptor const& desc = {}) noexcept {
-            FrameGraph& fg = mFrameGraph;
-            return fg.create(fg.getArena().make<fg::ResourceEntry<T> >(name, desc));
+            return mFrameGraph.create<T>(name, desc);
         }
 
         // Create a virtual resource that can eventually turn into a concrete texture or
@@ -177,8 +176,7 @@ public:
     // handle is invalid.
     template<typename T>
     typename T::Descriptor const& getDescriptor(FrameGraphResource r) {
-        fg::ResourceEntryBase& base = getResourceEntry(r);
-        auto& entry = static_cast<fg::ResourceEntry<T>&>(base);
+        fg::ResourceEntry<T>& entry = getResourceEntry<T>(r);
         return entry.getDescriptor();
     }
 
@@ -248,7 +246,7 @@ private:
 
     fg::PassNode& createPass(const char* name, FrameGraphPassExecutor* base) noexcept;
 
-    fg::ResourceNode& getResource(FrameGraphResource r);
+    fg::ResourceNode& getResourceNode(FrameGraphResource r);
 
     fg::RenderTarget& createRenderTarget(const char* name,
             FrameGraphRenderTarget::Descriptor const& desc) noexcept;
@@ -271,7 +269,18 @@ private:
 
 
     FrameGraphResource create(fg::ResourceEntryBase* pResourceEntry) noexcept;
-    fg::ResourceEntryBase& getResourceEntry(FrameGraphResource r) noexcept;
+
+    template<typename T>
+    FrameGraphResource create(const char* name, typename T::Descriptor const& desc) noexcept {
+        return create(mArena.make<fg::ResourceEntry<T> >(name, mId++, desc));
+    }
+
+    fg::ResourceEntryBase& getResourceEntryBase(FrameGraphResource r) noexcept;
+
+    template<typename T>
+    fg::ResourceEntry<T>& getResourceEntry(FrameGraphResource r) noexcept {
+        return static_cast<fg::ResourceEntry<T>&>(getResourceEntryBase(r));
+    }
 
 
     fg::ResourceAllocator& mResourceAllocator;
