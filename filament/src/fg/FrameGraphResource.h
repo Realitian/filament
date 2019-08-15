@@ -56,7 +56,6 @@ class FrameGraphResource {
     // index to the resource handle
     uint16_t index = UNINITIALIZED;
 
-
 public:
     FrameGraphResource() noexcept = default;
     FrameGraphResource(FrameGraphResource const& other) noexcept = default;
@@ -76,6 +75,13 @@ public:
     }
 };
 
+// TODO: all public-facing APIs shoud use FrameGraphResourceId<>
+template<typename T>
+class FrameGraphResourceId : public FrameGraphResource {
+public:
+    using FrameGraphResource::FrameGraphResource;
+};
+
 struct FrameGraphTexture {
     struct Descriptor {
         uint32_t width = 1;     // width of resource in pixel
@@ -93,54 +99,6 @@ struct FrameGraphTexture {
     void terminate(FrameGraph& fg) noexcept;
     backend::Handle<backend::HwTexture> texture;
 };
-
-///*
-// * A FrameGraph resource.
-// *
-// * This is used to represent a virtual resource.
-// */
-//
-//class FrameGraphResource {
-//    friend class FrameGraph;
-//    friend class FrameGraphPassResources;
-//    friend struct fg::PassNode;
-//    friend struct fg::RenderTarget;
-//    friend struct fg::RenderTargetResource;
-//
-//    explicit FrameGraphResource(uint16_t index) noexcept : index(index) {}
-//
-//    static constexpr uint16_t UNINITIALIZED = std::numeric_limits<uint16_t>::max();
-//    // index to the resource handle
-//    uint16_t index = UNINITIALIZED;
-//
-//public:
-//    FrameGraphResource() noexcept = default;
-//
-//    struct Descriptor {
-//        uint32_t width = 1;     // width of resource in pixel
-//        uint32_t height = 1;    // height of resource in pixel
-//        uint32_t depth = 1;     // # of images for 3D textures
-//        uint8_t levels = 1;     // # of levels for textures
-//        uint8_t samples = 1;
-//        backend::SamplerType type = backend::SamplerType::SAMPLER_2D;     // texture target type
-//        backend::TextureFormat format = backend::TextureFormat::RGBA8;    // resource internal format
-//    };
-//
-//    bool isValid() const noexcept { return index != UNINITIALIZED; }
-//
-//    bool operator < (const FrameGraphResource& rhs) const noexcept {
-//        return index < rhs.index;
-//    }
-//
-//    bool operator == (const FrameGraphResource& rhs) const noexcept {
-//        return (index == rhs.index);
-//    }
-//
-//    bool operator != (const FrameGraphResource& rhs) const noexcept {
-//        return !operator==(rhs);
-//    }
-//};
-
 
 namespace FrameGraphRenderTarget {
 

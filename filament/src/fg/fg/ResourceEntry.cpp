@@ -19,6 +19,8 @@
 namespace filament {
 namespace fg {
 
+VirtualResource::~VirtualResource() = default;
+
 ResourceEntryBase::ResourceEntryBase(const char* name, uint16_t id) noexcept
         : name(name), id(id) {
 }

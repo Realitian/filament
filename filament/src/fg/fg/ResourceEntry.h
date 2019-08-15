@@ -17,6 +17,8 @@
 #ifndef TNT_FILAMENT_FG_RESOURCEENTRY_H
 #define TNT_FILAMENT_FG_RESOURCEENTRY_H
 
+#include "VirtualResource.h"
+
 #include <type_traits>
 
 #include <stdint.h>
@@ -29,16 +31,11 @@ namespace fg {
 
 struct PassNode;
 
-class ResourceEntryBase {
+class ResourceEntryBase : public VirtualResource {
 public:
     explicit ResourceEntryBase(const char* name, uint16_t id) noexcept;
     ResourceEntryBase(ResourceEntryBase const&) = default;
-    virtual ~ResourceEntryBase();
-
-    virtual void create(FrameGraph& fg) noexcept = 0;
-    virtual void destroy(FrameGraph& fg) noexcept = 0;
-
-    // computed during compile()
+    ~ResourceEntryBase() override;
 
     // constants
     const char* const name;
@@ -49,8 +46,6 @@ public:
     uint8_t version = 0;
 
     // computed during compile()
-    PassNode* first = nullptr;              // pass that needs to instantiate the resource
-    PassNode* last = nullptr;               // pass that can destroy the resource
     uint32_t refs = 0;                      // final reference count
 };
 
