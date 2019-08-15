@@ -18,6 +18,7 @@
 #define TNT_FILAMENT_FRAMEGRAPHPASSRESOURCES_H
 
 #include "FrameGraphResource.h"
+#include "FrameGraph.h"
 
 #include <backend/DriverEnums.h>
 #include <backend/Handle.h>
@@ -45,7 +46,15 @@ public:
 
     RenderTargetInfo getRenderTarget(FrameGraphResource r, uint8_t level = 0) const noexcept;
 
-    FrameGraphResource::Descriptor const& getDescriptor(FrameGraphResource r) const noexcept;
+    template<typename T>
+    typename T::Descriptor const& getDescriptor(FrameGraphResource r) const {
+        // TODO: we should check that this FrameGraphResource is indeed used by this pass
+        return mFrameGraph.getDescriptor<T>(r);
+    }
+
+    FrameGraphTexture::Descriptor const& getDescriptor(FrameGraphResource r) const noexcept {
+        return getDescriptor<FrameGraphTexture>(r);
+    }
 
 private:
     friend class FrameGraph;
