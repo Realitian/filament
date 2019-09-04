@@ -25,15 +25,19 @@ fragment {
         prepareMaterial(material);
         vec3 sky = texture(materialParams_skybox, variable_eyeDirection.xyz).rgb;
         sky *= frameUniforms.iblLuminance;
-        if (materialParams.showSun && frameUniforms.sun.w >= 0.0f) {
+        float gradient = 0.97;
+        if (frameUniforms.sun.w >= 0.0f) {
             vec3 direction = normalize(variable_eyeDirection.xyz);
             vec3 sun = frameUniforms.lightColorIntensity.rgb * frameUniforms.lightColorIntensity.a;
             float cosAngle = dot(direction, frameUniforms.lightDirection);
             float x = (cosAngle - frameUniforms.sun.x) * frameUniforms.sun.z;
-            float gradient = pow(1.0 - saturate(x), frameUniforms.sun.w);
-            sky = sky + gradient * sun;
+            gradient = pow(1.0 - saturate(x), frameUniforms.sun.w);
+            sky = gradient * sun;
+            float factor = 1.0 - direction.y;
+            factor = (factor - 0.3 ) / 0.7;
+            gradient = 0.97*factor;
         }
-        material.baseColor = vec4(sky, 1.0);
+        material.baseColor = vec4(gradient, gradient, gradient, 1.0);
     }
 }
 
