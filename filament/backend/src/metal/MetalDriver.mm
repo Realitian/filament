@@ -720,7 +720,9 @@ void MetalDriver::popGroupMarker(int dummy) {
 
 void MetalDriver::readPixels(Handle<HwRenderTarget> src, uint32_t x, uint32_t y, uint32_t width,
         uint32_t height, PixelBufferDescriptor&& data) {
-
+    if (mContext->currentDrawable != nil) {
+        [mContext->currentDrawable.texture getBytes:data.buffer bytesPerRow:data.size fromRegion:MTLRegionMake2D(0, 0, width, height) mipmapLevel:0];
+    }
 }
 
 void MetalDriver::readStreamPixels(Handle<HwStream> sh, uint32_t x, uint32_t y, uint32_t width,
