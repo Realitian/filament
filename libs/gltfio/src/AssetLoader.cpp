@@ -830,6 +830,7 @@ MaterialInstance* FAssetLoader::createMaterialInstance(const cgltf_material* inp
     // This not only creates a material instance, it modifies the material key according to our
     // rendering constraints. For example, Filament only supports 2 sets of texture coordinates.
     MaterialInstance* mi = mMaterials->createMaterialInstance(&matkey, uvmap, inputMat->name);
+    mi->name = inputMat->name;
     mResult->mMaterialInstances.push_back(mi);
 
     if (inputMat->alpha_mode == cgltf_alpha_mode_mask) {
