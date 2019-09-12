@@ -22,6 +22,7 @@
 #include <filament/TextureSampler.h>
 
 #include <utils/compiler.h>
+#include <string>
 
 namespace filament {
 
@@ -36,6 +37,11 @@ public:
      * @return the Material associated with this instance
      */
     Material const* getMaterial() const noexcept;
+
+    /**
+     * property name
+     */
+    std::string name;
 
     /**
      * Set a uniform by name
