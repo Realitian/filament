@@ -132,7 +132,7 @@ static void generateTrivialIndices(uint32_t* dst, size_t numVertices) {
     }
 }
 
-bool ResourceLoader::loadResources(FilamentAsset* asset) {
+bool ResourceLoader::loadResources(FilamentAsset* asset, LoadCallBack callback) {
     FFilamentAsset* fasset = upcast(asset);
     if (fasset->mResourcesLoaded) {
         return false;
@@ -223,6 +223,7 @@ bool ResourceLoader::loadResources(FilamentAsset* asset) {
     const BufferBinding* bindings = asset->getBufferBindings();
     bool needsTangents = false;
     bool needsSparseData = false;
+    int totalSize = asset->getBufferBindingCount();
     for (size_t i = 0, n = asset->getBufferBindingCount(); i < n; ++i) {
         auto bb = bindings[i];
         if (bb.vertexBuffer && bb.generateTangents) {
@@ -257,6 +258,9 @@ bool ResourceLoader::loadResources(FilamentAsset* asset) {
             IndexBuffer::BufferDescriptor bd(data8, bb.size, AssetPool::onLoadedResource, mPool);
             bb.indexBuffer->setBuffer(*mConfig.engine, std::move(bd));
         }
+        
+        if ( callback )
+            callback(0, i, totalSize);
     }
 
     // Copy over the inverse bind matrices to allow users to destroy the source asset.
@@ -276,10 +280,10 @@ bool ResourceLoader::loadResources(FilamentAsset* asset) {
     }
 
     // Finally, load image files and create Filament Textures.
-    return createTextures(fasset);
+    return createTextures(fasset, callback);
 }
 
-bool ResourceLoader::createTextures(details::FFilamentAsset* asset) const {
+bool ResourceLoader::createTextures(details::FFilamentAsset* asset, LoadCallBack callback) const {
     // Define a simple functor that creates a Filament Texture from a blob of texels.
     // TODO: this could be optimized, e.g. do not generate mips if never mipmap-sampled, and use a
     // more compact format when possible.
@@ -314,7 +318,12 @@ bool ResourceLoader::createTextures(details::FFilamentAsset* asset) const {
     tsl::robin_map<std::string, Texture*> urlTextures;
 
     const TextureBinding* texbindings = asset->getTextureBindings();
+    int totalSize = asset->getTextureBindingCount();
+
     for (size_t i = 0, n = asset->getTextureBindingCount(); i < n; ++i) {
+        if ( callback )
+            callback(1, i, totalSize);
+
         auto tb = texbindings[i];
 
         // Check if the texture binding uses BufferView data (i.e. it does not have a URL).
