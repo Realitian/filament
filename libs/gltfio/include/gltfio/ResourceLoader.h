@@ -75,6 +75,8 @@ class ResourceLoader {
 public:
     using BufferDescriptor = filament::backend::BufferDescriptor;
 
+    using LoadCallBack = std::function<void(int step, int loadedCount, int totalCount)>;
+
     ResourceLoader(const ResourceConfiguration& config);
     ~ResourceLoader();
 
@@ -86,7 +88,7 @@ public:
      * Returns false if resources have already been loaded, or if one or more resources could not
      * be loaded.
      */
-    bool loadResources(FilamentAsset* asset);
+    bool loadResources(FilamentAsset* asset, LoadCallBack callback);
 
     /**
      * Adds raw resource data into a cache for platforms that do not have filesystem or network
@@ -95,7 +97,7 @@ public:
     void addResourceData(std::string url, BufferDescriptor&& buffer);
 
 private:
-    bool createTextures(details::FFilamentAsset* asset) const;
+    bool createTextures(details::FFilamentAsset* asset, LoadCallBack callback) const;
     void applySparseData(details::FFilamentAsset* asset) const;
     void computeTangents(details::FFilamentAsset* asset) const;
     void normalizeSkinningWeights(details::FFilamentAsset* asset) const;
