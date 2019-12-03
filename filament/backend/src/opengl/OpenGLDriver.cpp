@@ -1550,6 +1550,11 @@ void OpenGLDriver::setTextureData(GLTexture* t,
     DEBUG_MARKER()
     auto& gl = mContext;
 
+    if(xoffset + width > t->width >> level) return;
+    if(yoffset + height > t->height >> level) return;
+    if(zoffset + depth > t->depth) return;
+    if(t->samples > 1) return;
+
     assert(xoffset + width <= t->width >> level);
     assert(yoffset + height <= t->height >> level);
     assert(zoffset + depth <= t->depth);

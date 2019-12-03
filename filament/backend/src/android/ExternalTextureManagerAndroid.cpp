@@ -122,13 +122,15 @@ backend::Platform::ExternalTexture* ExternalTextureManagerAndroid::create() noex
         // initialize java stuff on-demand
         if (!mGraphicBufferClass) {
             JNIEnv* env = mVm.getEnvironment();
-            mGraphicBufferClass = env->FindClass("android/view/GraphicBuffer");
-            mGraphicBuffer_nCreateGraphicBuffer = env->GetStaticMethodID(
-                    mGraphicBufferClass, "nCreateGraphicBuffer", "(IIII)J");
-            mGraphicBuffer_nDestroyGraphicBuffer = env->GetStaticMethodID(
-                    mGraphicBufferClass, "nDestroyGraphicBuffer", "(J)V");
+            if(env) {
+                mGraphicBufferClass = env->FindClass("android/view/GraphicBuffer");
+                mGraphicBuffer_nCreateGraphicBuffer = env->GetStaticMethodID(
+                        mGraphicBufferClass, "nCreateGraphicBuffer", "(IIII)J");
+                mGraphicBuffer_nDestroyGraphicBuffer = env->GetStaticMethodID(
+                        mGraphicBufferClass, "nDestroyGraphicBuffer", "(J)V");
 
-            mGraphicBufferClass = static_cast<jclass>(env->NewGlobalRef(mGraphicBufferClass));
+                mGraphicBufferClass = static_cast<jclass>(env->NewGlobalRef(mGraphicBufferClass));
+            }
         }
     }
 #endif

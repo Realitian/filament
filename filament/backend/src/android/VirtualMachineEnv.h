@@ -59,12 +59,15 @@ public:
     }
 
     inline JNIEnv* getEnvironment() noexcept {
-        assert(mVirtualMachine);
-        JNIEnv* env = mJniEnv;
-        if (UTILS_UNLIKELY(!env)) {
-            return getEnvironmentSlow();
+        if(mVirtualMachine){
+            assert(mVirtualMachine);
+            JNIEnv* env = mJniEnv;
+            if (UTILS_UNLIKELY(!env)) {
+                return getEnvironmentSlow();
+            }
+            return env;
         }
-        return env;
+        return nullptr;
     }
 
     static void handleException(JNIEnv* env) noexcept;
