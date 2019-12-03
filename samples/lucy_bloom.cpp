@@ -148,7 +148,7 @@ static void setup(LucyApp& app, Engine* engine, View* finalView, Scene* finalSce
     app.materials = createMaterialGenerator(engine);
     app.loader = AssetLoader::create({engine, app.materials });
     app.asset = app.loader->createAssetFromBinary(RESOURCE_ARGS(LUCY));
-    gltfio::ResourceLoader({ .engine = engine }).loadResources(app.asset);
+    gltfio::ResourceLoader({ .engine = engine }).loadResources(app.asset, nullptr);
     app.asset->releaseSourceData();
 
     // Tweak the model materials.

@@ -169,7 +169,7 @@ int main(int argc, char** argv) {
         }
 
         // Consume the glTF file.
-        std::ifstream in(filename.c_str(), std::ifstream::in);
+        std::ifstream in(filename.c_str(), std::ifstream::in|std::ios::binary);
         std::vector<uint8_t> buffer(static_cast<unsigned long>(contentSize));
         if (!in.read((char*) buffer.data(), contentSize)) {
             std::cerr << "Unable to read " << filename << std::endl;
@@ -198,7 +198,16 @@ int main(int argc, char** argv) {
         configuration.gltfPath = filename.getAbsolutePath();
         configuration.normalizeSkinningWeights = true;
         configuration.recomputeBoundingBoxes = false;
-        gltfio::ResourceLoader(configuration).loadResources(app.asset);
+        gltfio::ResourceLoader(configuration).loadResources(app.asset, nullptr);
+
+				size_t miCount = app.asset->getMaterialInstanceCount();
+				MaterialInstance* const* mIArray = app.asset->getMaterialInstances();
+				for (int i = 0; i < miCount; i++) {
+					mIArray[i]->setParameter("visibleFactor", 1.0f);
+
+					//filament::Material::ParameterInfo* infos = new filament::Material::ParameterInfo[mIArray[i]->getMaterial()->getParameterCount()];
+					//mIArray[i]->getMaterial()->getParameters(infos, mIArray[i]->getMaterial()->getParameterCount());
+				}
 
         // Load animation data then free the source hierarchy.
         app.asset->getAnimator();
@@ -217,8 +226,9 @@ int main(int argc, char** argv) {
         app.engine = engine;
         app.names = new NameComponentManager(EntityManager::get());
         app.viewer = new SimpleViewer(engine, scene, view);
-        app.materials = (app.materialSource == GENERATE_SHADERS) ?
-                createMaterialGenerator(engine) : createUbershaderLoader(engine);
+        app.materials = 
+					//(app.materialSource == GENERATE_SHADERS) ? createMaterialGenerator(engine) : 
+					createUbershaderLoader(engine);
         app.loader = AssetLoader::create({engine, app.materials, app.names });
         if (filename.isEmpty()) {
             app.asset = app.loader->createAssetFromBinary(GLTF_DAMAGEDHELMET_DATA,
