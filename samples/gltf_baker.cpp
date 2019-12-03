@@ -322,7 +322,7 @@ static void updateViewerMesh(BakerApp& app) {
             .gltfPath = app.filename.getAbsolutePath(),
             .normalizeSkinningWeights = true,
             .recomputeBoundingBoxes = false
-        }).loadResources(app.viewerAsset);
+        }).loadResources(app.viewerAsset, nullptr);
 
         // Load animation data then free the source hierarchy.
         app.viewerAsset->getAnimator();
