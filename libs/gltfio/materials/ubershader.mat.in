@@ -10,6 +10,7 @@ material {
 
         { type : float3, name : specularFactor },
         { type : float, name : glossinessFactor },
+        { type : float, name : visibleFactor },
 
         // Base Color
         { type : int, name : baseColorIndex },
@@ -73,6 +74,8 @@ fragment {
         #endif
 
         material.baseColor *= getColor();
+        
+		//material.baseColor *= materialParams.visibleFactor;
 
         #if !defined(SHADING_MODEL_UNLIT)
 

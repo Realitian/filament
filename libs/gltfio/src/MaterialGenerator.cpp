@@ -133,6 +133,8 @@ std::string shaderFromKey(const MaterialKey& config) {
     if (config.hasVertexColors) {
         shader += "material.baseColor *= getColor();\n";
     }
+		
+		shader += "material.baseColor *= materialParams.visibleFactor;\n";
 
     if (!config.unlit) {
         if (config.useSpecularGlossiness) {
@@ -280,21 +282,23 @@ Material* createMaterial(Engine* engine, const MaterialKey& config, const UvMap&
         }
     }
 
-    switch (config.alphaMode) {
-        case AlphaMode::OPAQUE:
-            builder.blending(MaterialBuilder::BlendingMode::OPAQUE);
-            break;
-        case AlphaMode::MASK:
-            builder.blending(MaterialBuilder::BlendingMode::MASKED);
-            break;
-        case AlphaMode::BLEND:
+		builder.parameter(MaterialBuilder::UniformType::FLOAT, "visibleFactor");
+
+    //switch (config.alphaMode) {
+    //    case AlphaMode::OPAQUE:
+    //        builder.blending(MaterialBuilder::BlendingMode::OPAQUE);
+    //        break;
+    //    case AlphaMode::MASK:
+    //        builder.blending(MaterialBuilder::BlendingMode::MASKED);
+    //        break;
+    //    case AlphaMode::BLEND:
             builder.blending(MaterialBuilder::BlendingMode::FADE);
             builder.depthWrite(true);
-            break;
-        default:
-            // Ignore
-            break;
-    }
+    //        break;
+    //    default:
+    //        // Ignore
+    //        break;
+    //}
 
     if (config.unlit) {
         builder.shading(Shading::UNLIT);
