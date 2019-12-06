@@ -48,6 +48,27 @@ using namespace utils;
 
 static const auto FREE_CALLBACK = [](void* mem, size_t, void*) { free(mem); };
 
+ // Multiple glTF textures might be loaded from the same URL or buffer pointer, so we prevent
+// needless re-decoding with a cache of Filament Texture objects composed of two maps, where
+// the map keys are URL strings or source data pointers.
+struct TextureCacheEntry {
+    filament::Texture* texture;
+    stbi_uc* texels;
+};
+tsl::robin_map<const void*, std::unique_ptr<TextureCacheEntry>> bufTextureCache;
+tsl::robin_map<std::string, std::unique_ptr<TextureCacheEntry>> urlTextureCache;
+
+//for loading Textures
+
+// The following loop does a fair bit of synchronous work but it offloads the actual PNG / JPEG
+// decoding into the job system. Synchronously, it invokes stbi_info() over each image, creates
+// Filament Textures, and updates the above caches. Along the way, it kicks off jobs that
+// perform the decoding.
+
+utils::JobSystem* js;
+utils::JobSystem::Job* parent;
+
+
 namespace gltfio {
 
 struct ResourceLoader::Impl {
@@ -130,6 +151,163 @@ static void convertBytesToShorts(uint16_t* dst, const uint8_t* src, size_t count
 static void generateTrivialIndices(uint32_t* dst, size_t numVertices) {
     for (size_t i = 0; i < numVertices; ++i) {
         dst[i] = i;
+    }
+}
+
+int ResourceLoader::preLoadResources(FilamentAsset* asset)
+{
+    FFilamentAsset* fasset = upcast(asset);
+    if (fasset->mResourcesLoaded) {
+        return false;
+    }
+    fasset->mResourcesLoaded = true;
+    mPool->addAsset(fasset);
+    auto gltf = (cgltf_data*) fasset->mSourceAsset;
+    cgltf_options options {};
+
+    // For emscripten builds we have a custom implementation of cgltf_load_buffers which looks
+    // inside a cache of externally-supplied data blobs, rather than loading from the filesystem.
+
+    #if defined(__EMSCRIPTEN__)
+
+    if (gltf->buffers_count && !gltf->buffers[0].data && !gltf->buffers[0].uri && gltf->bin) {
+        if (gltf->bin_size < gltf->buffers[0].size) {
+            slog.e << "Bad size." << io::endl;
+            return false;
+        }
+        gltf->buffers[0].data = (void*) gltf->bin;
+    }
+
+    for (cgltf_size i = 0; i < gltf->buffers_count; ++i) {
+        if (gltf->buffers[i].data) {
+            continue;
+        }
+        const char* uri = gltf->buffers[i].uri;
+        if (uri == nullptr) {
+            continue;
+        }
+        if (strncmp(uri, "data:", 5) == 0) {
+            const char* comma = strchr(uri, ',');
+            if (comma && comma - uri >= 7 && strncmp(comma - 7, ";base64", 7) == 0) {
+                cgltf_result res = cgltf_load_buffer_base64(&options, gltf->buffers[i].size, comma + 1, &gltf->buffers[i].data);
+                if (res != cgltf_result_success) {
+                    slog.e << "Unable to load " << uri << io::endl;
+                    return false;
+                }
+            } else {
+                slog.e << "Unable to load " << uri << io::endl;
+                return false;
+            }
+        } else if (strstr(uri, "://") == nullptr) {
+            auto iter = pImpl->mUserCache.find(uri);
+            if (iter == pImpl->mUserCache.end()) {
+                slog.e << "Unable to load " << uri << io::endl;
+                return false;
+            }
+            gltf->buffers[i].data = iter->second.buffer;
+        } else {
+            slog.e << "Unable to load " << uri << io::endl;
+            return false;
+        }
+    }
+
+    #else
+
+    // Read data from the file system and base64 URLs.
+    cgltf_result result = cgltf_load_buffers(&options, gltf, mConfig.gltfPath.c_str());
+    if (result != cgltf_result_success) {
+        slog.e << "Unable to load resources." << io::endl;
+        return false;
+    }
+
+    #endif
+
+    #ifndef NDEBUG
+    if (cgltf_validate(gltf) != cgltf_result_success) {
+        slog.e << "Failed cgltf validation." << io::endl;
+        return false;
+    }
+    #endif
+
+    // To be robust against the glTF conformance suite, we optionally ensure that skinning weights
+    // sum to 1.0 at every vertex. Note that if the same weights buffer is shared in multiple
+    // places, this will needlessly repeat the work. In the future we would like to remove this
+    // feature, and instead simply require correct models. See also:
+    // https://github.com/KhronosGroup/glTF-Sample-Models/issues/215
+    if (mConfig.normalizeSkinningWeights) {
+        normalizeSkinningWeights(fasset);
+    }
+
+    if (mConfig.recomputeBoundingBoxes) {
+        updateBoundingBoxes(fasset);
+    }
+
+    // Upload data to the GPU.
+    needsTangents = false;
+    needsSparseData = false;
+    int totalSize = asset->getBufferBindingCount();
+
+    return totalSize;
+}
+    
+void ResourceLoader::loadResource(FilamentAsset* asset, int index)
+{
+    const BufferBinding* bindings = asset->getBufferBindings();
+
+    auto bb = bindings[index];
+    if (bb.vertexBuffer && bb.generateTangents) {
+        needsTangents = true;
+    } else if (bb.vertexBuffer && bb.sparseAccessor) {
+        needsSparseData = true;
+    } else if (bb.vertexBuffer && !bb.generateDummyData) {
+        const uint8_t* data8 = bb.offset + (const uint8_t*) *bb.data;
+        mPool->addPendingUpload();
+        VertexBuffer::BufferDescriptor bd(data8, bb.size, AssetPool::onLoadedResource, mPool);
+        bb.vertexBuffer->setBufferAt(*mConfig.engine, bb.bufferIndex, std::move(bd));
+    } else if (bb.vertexBuffer) {
+        uint32_t* dummyData = (uint32_t*) malloc(bb.size);
+        memset(dummyData, 0xff, bb.size);
+        VertexBuffer::BufferDescriptor bd(dummyData, bb.size, FREE_CALLBACK);
+        bb.vertexBuffer->setBufferAt(*mConfig.engine, bb.bufferIndex, std::move(bd));
+    } else if (bb.generateTrivialIndices) {
+        uint32_t* data32 = (uint32_t*) malloc(bb.size);
+        generateTrivialIndices(data32, bb.size / sizeof(uint32_t));
+        IndexBuffer::BufferDescriptor bd(data32, bb.size, FREE_CALLBACK);
+        bb.indexBuffer->setBuffer(*mConfig.engine, std::move(bd));
+    } else if (bb.convertBytesToShorts) {
+        const uint8_t* data8 = bb.offset + (const uint8_t*) *bb.data;
+        size_t size16 = bb.size * 2;
+        uint16_t* data16 = (uint16_t*) malloc(size16);
+        convertBytesToShorts(data16, data8, bb.size);
+        IndexBuffer::BufferDescriptor bd(data16, size16, FREE_CALLBACK);
+        bb.indexBuffer->setBuffer(*mConfig.engine, std::move(bd));
+    } else if (bb.indexBuffer) {
+        const uint8_t* data8 = bb.offset + (const uint8_t*) *bb.data;
+        mPool->addPendingUpload();
+        IndexBuffer::BufferDescriptor bd(data8, bb.size, AssetPool::onLoadedResource, mPool);
+        bb.indexBuffer->setBuffer(*mConfig.engine, std::move(bd));
+    }
+}
+
+void ResourceLoader::postLoadResources(FilamentAsset* asset)
+{
+    FFilamentAsset* fasset = upcast(asset);
+    auto gltf = (cgltf_data*) fasset->mSourceAsset;
+
+    // Copy over the inverse bind matrices to allow users to destroy the source asset.
+    for (cgltf_size i = 0, len = gltf->skins_count; i < len; ++i) {
+        importSkinningData(fasset->mSkins[i], gltf->skins[i]);
+    }
+
+    // Apply sparse data modifications to base arrays, then upload the result.
+    if (needsSparseData) {
+        applySparseData(fasset);
+    }
+
+    // Compute surface orientation quaternions if necessary. This is similar to sparse data in that
+    // we need to generate the contents of a GPU buffer by processing one or more CPU buffer(s).
+    if (needsTangents) {
+        computeTangents(fasset);
     }
 }
 
@@ -282,6 +460,139 @@ bool ResourceLoader::loadResources(FilamentAsset* asset, LoadCallBack callback) 
 
     // Finally, load image files and create Filament Textures.
     return createTextures(fasset, callback);
+}
+
+int ResourceLoader::preLoadTextures(FilamentAsset* asset)
+{
+    // The following loop does a fair bit of synchronous work but it offloads the actual PNG / JPEG
+    // decoding into the job system. Synchronously, it invokes stbi_info() over each image, creates
+    // Filament Textures, and updates the above caches. Along the way, it kicks off jobs that
+    // perform the decoding.
+
+    js = utils::JobSystem::getJobSystem();
+    parent = js->createJob();
+
+    FFilamentAsset* fasset = upcast(asset);
+    int totalSize = fasset->getTextureBindingCount();
+
+    return totalSize;
+}
+
+void ResourceLoader::loadTexture(FilamentAsset* asset, int index)
+{
+    FFilamentAsset* fasset = upcast(asset);
+    const TextureBinding* texbindings = fasset->getTextureBindings();
+
+    // Define a simple functor that creates a Filament Texture.
+    // TODO: this could be optimized, e.g. do not generate mips if never mipmap-sampled, and use a
+    // more compact format when possible.
+    auto createTexture = [this, fasset](uint32_t w, uint32_t h, bool srgb) {
+        Texture *tex = Texture::Builder()
+                .width(w)
+                .height(h)
+                .levels(0xff)
+                .format(srgb ? Texture::InternalFormat::SRGB8_A8 : Texture::InternalFormat::RGBA8)
+                .build(*mConfig.engine);
+        fasset->mTextures.push_back(tex);
+        return tex;
+    };
+
+    auto tb = texbindings[index];
+    TextureCacheEntry* cacheEntry = nullptr;
+    int width, height, comp;
+
+    // Check if the texture binding uses BufferView data (i.e. it does not have a URL).
+    if (tb.data) {
+        const uint8_t* sourceData = tb.offset + (const uint8_t*) *tb.data;
+        cacheEntry = bufTextureCache[sourceData] ? bufTextureCache[sourceData].get() : nullptr;
+        if (cacheEntry) {
+            tb.materialInstance->setParameter(tb.materialParameter, cacheEntry->texture, tb.sampler);
+            return;
+        }
+
+        cacheEntry = (bufTextureCache[sourceData] = std::make_unique<TextureCacheEntry>()).get();
+
+        if (stbi_info_from_memory(sourceData, tb.totalSize, &width, &height, &comp)) {
+            utils::JobSystem::Job* decode = utils::jobs::createJob(*js, parent, [=] {
+                int width, height, comp;
+                cacheEntry->texels = stbi_load_from_memory(sourceData, tb.totalSize, &width, &height, &comp, 4);
+            });
+            js->run(decode);
+        }
+
+        cacheEntry->texture = createTexture(width, height, tb.srgb);
+        cacheEntry->texels = nullptr;
+        tb.materialInstance->setParameter(tb.materialParameter, cacheEntry->texture, tb.sampler);
+        return;
+    }
+
+    // Check if we already created a Texture object for this URL.
+    cacheEntry = urlTextureCache[tb.uri] ? urlTextureCache[tb.uri].get() : nullptr;
+    if (cacheEntry) {
+        tb.materialInstance->setParameter(tb.materialParameter, cacheEntry->texture, tb.sampler);
+        return;
+    }
+
+    cacheEntry = (urlTextureCache[tb.uri] = std::make_unique<TextureCacheEntry>()).get();
+
+    // Check the user-supplied resource cache for this URL, otherwise load it from the file system.
+    auto iter = pImpl->mUserCache.find(tb.uri);
+    if (iter != pImpl->mUserCache.end()) {
+        const uint8_t* sourceData = (const uint8_t*) iter->second.buffer;
+        if (stbi_info_from_memory(sourceData, iter->second.size, &width, &height, &comp)) {
+            utils::JobSystem::Job* decode = utils::jobs::createJob(*js, parent, [=] {
+                int width, height, comp;
+                cacheEntry->texels = stbi_load_from_memory(sourceData, iter->second.size, &width, &height, &comp, 4);
+            });
+            js->run(decode);
+        }
+    } else {
+        #if defined(__EMSCRIPTEN__)
+            slog.e << "Unable to load texture: " << tb.uri << io::endl;
+            return false;
+        #else
+            utils::Path fullpath = this->mConfig.gltfPath.getParent() + tb.uri;
+            if (stbi_info(fullpath.c_str(), &width, &height, &comp)) {
+                utils::JobSystem::Job* decode = utils::jobs::createJob(*js, parent, [=] {
+                    int width, height, comp;
+                    cacheEntry->texels = stbi_load(fullpath.c_str(), &width, &height, &comp, 4);
+                });
+                js->run(decode);
+            }
+        #endif
+    }
+
+    cacheEntry->texture = createTexture(width, height, tb.srgb);
+    tb.materialInstance->setParameter(tb.materialParameter, cacheEntry->texture, tb.sampler);
+}
+
+void ResourceLoader::postLoadTextures()
+{
+    js->runAndWait(parent);
+
+    // Upload all texture data and generate mipmaps.
+
+    auto upload = [](TextureCacheEntry* cacheEntry, Engine& engine) {
+        Texture* texture = cacheEntry->texture;
+        if (texture) {
+            uint8_t* texels = cacheEntry->texels;
+            Texture::PixelBufferDescriptor pbd(texels,
+                    texture->getWidth() * texture->getHeight() * 4,
+                    Texture::Format::RGBA,
+                    Texture::Type::UBYTE,
+                    [] (void* buffer, size_t, void*) { free(buffer); });
+            texture->setImage(engine, 0, std::move(pbd));
+            texture->generateMipmaps(engine);
+            cacheEntry->texture = nullptr;
+        }
+    };
+
+    for (auto& pair : bufTextureCache) {
+        upload(pair.second.get(), *mConfig.engine);
+    }
+    for (auto& pair : urlTextureCache) {
+        upload(pair.second.get(), *mConfig.engine);
+    }
 }
 
 bool ResourceLoader::createTextures(details::FFilamentAsset* asset, LoadCallBack callback) const {

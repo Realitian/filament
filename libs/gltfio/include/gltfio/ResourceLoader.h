@@ -89,6 +89,14 @@ public:
      * be loaded.
      */
     bool loadResources(FilamentAsset* asset, LoadCallBack callback);
+    
+    int preLoadResources(FilamentAsset* asset);
+    void loadResource(FilamentAsset* asset, int index);
+    void postLoadResources(FilamentAsset* asset);
+
+    int preLoadTextures(FilamentAsset* asset);
+    void loadTexture(FilamentAsset* asset, int index);
+    void postLoadTextures();
 
     /**
      * Adds raw resource data into a cache for platforms that do not have filesystem or network
@@ -107,6 +115,10 @@ private:
 
     struct Impl;
     Impl* pImpl;
+
+    //for loading Resources
+    bool needsTangents = false;
+    bool needsSparseData = false;
 };
 
 } // namespace gltfio
